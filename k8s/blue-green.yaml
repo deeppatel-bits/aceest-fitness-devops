@@ -1,0 +1,79 @@
+# Blue-Green Deployment
+# BLUE (current stable)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aceest-fitness-blue
+  labels:
+    app: aceest-fitness
+    version: blue
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: aceest-fitness
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: aceest-fitness
+        version: blue
+    spec:
+      containers:
+      - name: aceest-fitness
+        image: ghcr.io/deeppatel-bits/aceest-fitness:v3.2.4
+        ports:
+        - containerPort: 5000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+# GREEN (new version)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aceest-fitness-green
+  labels:
+    app: aceest-fitness
+    version: green
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: aceest-fitness
+      version: green
+  template:
+    metadata:
+      labels:
+        app: aceest-fitness
+        version: green
+    spec:
+      containers:
+      - name: aceest-fitness
+        image: ghcr.io/deeppatel-bits/aceest-fitness:latest
+        ports:
+        - containerPort: 5000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+# Service - switch between blue/green by changing selector version
+apiVersion: v1
+kind: Service
+metadata:
+  name: aceest-fitness-bg-service
+spec:
+  selector:
+    app: aceest-fitness
+    version: blue  # Change to 'green' to switch traffic
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: NodePort
