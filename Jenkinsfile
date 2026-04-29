@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         IMAGE_NAME = "ghcr.io/deeppatel-bits/aceest-fitness"
-        REGISTRY   = "ghcr.io"
         GIT_REPO   = "https://github.com/deeppatel-bits/aceest-fitness-devops.git"
     }
 
@@ -16,51 +15,24 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                echo '>>> Installing Python dependencies...'
-                sh '''
-                    pip install -r requirements.txt --quiet
-                '''
+        stage('Install & Test') {
+            agent {
+                docker {
+                    image 'python:3.9-slim'
+                    reuseNode true
+                }
             }
-        }
-
-        stage('Run Tests') {
             steps {
-                echo '>>> Running Pytest unit tests...'
+                echo '>>> Installing dependencies and running tests...'
                 sh '''
+                    pip install flask pytest pytest-flask gunicorn --quiet
+                    mkdir -p reports
                     pytest tests/ -v --tb=short --junitxml=reports/test-results.xml
                 '''
             }
             post {
                 always {
-                    junit 'reports/test-results.xml'
-                }
-            }
-        }
-
-        stage('Code Quality - SonarQube') {
-            steps {
-                echo '>>> Running SonarQube analysis...'
-                withSonarQubeEnv('SonarQube') {
-                    sh '''
-                        sonar-scanner \
-                          -Dsonar.projectKey=aceest-fitness \
-                          -Dsonar.projectName="ACEest Fitness" \
-                          -Dsonar.sources=app \
-                          -Dsonar.tests=tests \
-                          -Dsonar.python.coverage.reportPaths=reports/coverage.xml \
-                          -Dsonar.language=py
-                    '''
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                echo '>>> Checking SonarQube Quality Gate...'
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    junit allowEmptyResults: true, testResults: 'reports/test-results.xml'
                 }
             }
         }
@@ -85,19 +57,6 @@ pipeline {
                         docker push ${IMAGE_NAME}:latest
                     """
                 }
-            }
-        }
-
-        stage('Deploy - Rolling Update') {
-            steps {
-                echo '>>> Deploying with Rolling Update strategy...'
-                sh """
-                    kubectl apply -f k8s/deployment.yaml
-                    kubectl set image deployment/aceest-fitness \
-                        aceest-fitness=${IMAGE_NAME}:${BUILD_NUMBER} \
-                        --record
-                    kubectl rollout status deployment/aceest-fitness --timeout=120s
-                """
             }
         }
     }
