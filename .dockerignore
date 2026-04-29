@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.db
+.pytest_cache/
+tests/
+*.egg-info/
+.git/
+.gitignore
+README.md
+k8s/
+Jenkinsfile
